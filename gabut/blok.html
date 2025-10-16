@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BlockXors-like Puzzle</title>
+  <style>
+    :root{
+      --bg:#0f1220;--panel:#171a2b;--accent:#6ee7ff;--accent2:#ffd166;--muted:#8a8fa6;--danger:#ff5a5f;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;background:var(--bg);color:#eef1ff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Ubuntu,Arial,sans-serif;margin:0}
+    .wrap{max-width:1000px;margin:0 auto;padding:16px;display:grid;gap:12px}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    h1{font-size:clamp(18px,2.4vw,26px);margin:0;font-weight:700;letter-spacing:.3px}
+    .panel{background:var(--panel);border:1px solid rgba(255,255,255,.08);border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.35)}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    .left{padding:12px;flex:1 1 420px}
+    .right{padding:12px;flex:0 0 280px}
+    canvas{width:100%;height:auto;display:block;image-rendering:pixelated;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:#0a0d1a}
+    .controls{display:flex;flex-wrap:wrap;gap:8px}
+    button{appearance:none;border:0;background:#1f2340;color:#e7ecff;padding:10px 14px;border-radius:12px;font-weight:600;cursor:pointer;transition:.15s transform,.15s opacity;border:1px solid rgba(255,255,255,.08)}
+    button:hover{transform:translateY(-1px)}
+    button:active{transform:translateY(0)}
+    .primary{background:linear-gradient(135deg, #3b82f6, #06b6d4);border:none}
+    .warn{background:#2a2030;border:1px solid rgba(255,90,95,.35);color:#ffc8ca}
+    .kbd{padding:4px 8px;border-radius:8px;background:#222646;border:1px solid rgba(255,255,255,.08);display:inline-block;margin-right:6px}
+    .legend{display:grid;grid-template-columns:1fr;gap:8px;font-size:14px;color:#c8ccdf}
+    .footer{opacity:.7;font-size:12px}
+    .select{display:flex;align-items:center;gap:8px}
+    select{background:#1f2340;color:#e7ecff;border:1px solid rgba(255,255,255,.12);padding:8px 10px;border-radius:10px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>🧩 BlockXors‑like — Puzzle XOR Dorong Balok</h1>
+      <div class="select panel" style="padding:8px 10px">
+        <label for="levelSelect">Level:</label>
+        <select id="levelSelect"></select>
+        <button id="btnReset" title="Ulangi level" class="warn">Reset</button>
+      </div>
+    </header>
+
+    <div class="row">
+      <div class="left panel">
+        <canvas id="game" width="720" height="720"></canvas>
+        <div class="controls" style="margin-top:10px">
+          <button id="btnUndo">↶ Undo</button>
+          <button id="btnPrev">⟨ Level Sebelumnya</button>
+          <button id="btnNext" class="primary">Level Berikutnya ⟩</button>
+        </div>
+        <div class="controls" style="margin-top:8px">
+          <button data-dir="up">⬆️</button>
+          <button data-dir="left">⬅️</button>
+          <button data-dir="down">⬇️</button>
+          <button data-dir="right">➡️</button>
+        </div>
+      </div>
+
+      <div class="right panel">
+        <div class="legend">
+          <div><span class="kbd">WASD</span><span class="kbd">↑↓←→</span> Gerak. Dorong balok untuk menerapkan pola <b>XOR</b> pada ubin.</div>
+          <div>Tujuan: buat semua <b>ubin target</b> menyala (kuning) ✨</div>
+          <div>Keterangan Papan:
+            <ul>
+              <li>🟦 Balok: saat didorong ke petak baru, pola (mis. Plus/X) men‑toggle (XOR) ubin di bawahnya.</li>
+              <li>⬛ Dinding: tidak dapat dilalui.</li>
+              <li>⬜ Lantai biasa.</li>
+              <li>🟡 Ubin Target: harus menyala semua untuk menang.</li>
+            </ul>
+          </div>
+          <div class="footer">Tip: gunakan <b>Undo</b> tak terbatas untuk eksperimen langkah.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // ====== Util ======
+  const deepClone = (x)=>JSON.parse(JSON.stringify(x));
+  const inBounds = (g,x,y)=> x>=0 && y>=0 && x<g.w && y<g.h;
+
+  // ====== Level Data ======
+  // Cell: {wall:boolean, target:boolean, value:0|1}
+  // Block: {x,y, mask:[[0/1]*3]*3, name:string}
+  // Moving a block into a new cell applies XOR of its mask centered on new position
+
+  const MASK_PLUS = {
+    name:"Plus",
+    data:[
+      [0,1,0],
+      [1,1,1],
+      [0,1,0]
+    ]
+  };
+  const MASK_X = {
+    name:"X",
+    data:[
+      [1,0,1],
+      [0,1,0],
+      [1,0,1]
+    ]
+  };
+  const MASK_SQUARE = {
+    name:"Kotak",
+    data:[
+      [1,1,1],
+      [1,0,1],
+      [1,1,1]
+    ]
+  };
+
+  function blankGrid(w,h){
+    const cells=[]; for(let y=0;y<h;y++){ const row=[]; for(let x=0;x<w;x++){ row.push({wall:false,target:false,value:0}); } cells.push(row);} 
+    return {w,h,cells};
+  }
+
+  function carveWalls(g, walls){ // array of [x,y]
+    for(const [x,y] of walls){ if(inBounds(g,x,y)) g.cells[y][x].wall=true; }
+  }
+  function setTargets(g, targets){ for(const [x,y,v] of targets){ if(inBounds(g,x,y)){ g.cells[y][x].target=true; g.cells[y][x].value=v|0; } } }
+
+  function makeLevel1(){
+    const g=blankGrid(9,9);
+    carveWalls(g,[...Array(9).keys()].map(i=>[0,i]).concat([...Array(9).keys()].map(i=>[8,i]),
+                    [...Array(9).keys()].map(i=>[i,0]),[...Array(9).keys()].map(i=>[i,8])));
+    setTargets(g, [[3,3,0],[4,3,0],[5,3,0],[4,4,0],[4,5,0]]); // plus shape targets
+    return {
+      name:"Pengantar XOR",
+      grid:g,
+      player:{x:2,y:4},
+      blocks:[{x:6,y:4,mask:MASK_PLUS.data,name:MASK_PLUS.name}],
+      tip:"Dorong balok Plus ke tengah formasi target."
+    };
+  }
+
+  function makeLevel2(){
+    const g=blankGrid(11,9);
+    // perimeter walls
+    carveWalls(g,[...Array(g.w).keys()].map(i=>[i,0]).concat([...Array(g.w).keys()].map(i=>[i,g.h-1]),
+      [...Array(g.h).keys()].map(i=>[0,i]),[...Array(g.h).keys()].map(i=>[g.w-1,i])));
+    // inner maze
+    carveWalls(g, [[2,2],[3,2],[4,2],[6,2],[7,2],[8,2], [2,6],[3,6],[4,6],[6,6],[7,6],[8,6], [5,3],[5,4],[5,5]]);
+    // targets checkerboard 3x3 in center
+    for(let dy=0;dy<3;dy++) for(let dx=0;dx<3;dx++){ const x=4+dx, y=3+dy; g.cells[y][x].target=true; g.cells[y][x].value=(dx^dy)&1; }
+    return {
+      name:"Silang vs Plus",
+      grid:g,
+      player:{x:1,y:4},
+      blocks:[{x:9,y:2,mask:MASK_X.data,name:MASK_X.name}, {x:9,y:6,mask:MASK_PLUS.data,name:MASK_PLUS.name}],
+      tip:"Kombinasikan pola X dan Plus untuk membuat semua target menyala."
+    };
+  }
+
+  function makeLevel3(){
+    const g=blankGrid(12,10);
+    carveWalls(g,[...Array(g.w).keys()].map(i=>[i,0]).concat([...Array(g.w).keys()].map(i=>[i,g.h-1]),
+      [...Array(g.h).keys()].map(i=>[0,i]),[...Array(g.h).keys()].map(i=>[g.w-1,i]),
+      [[3,2],[3,3],[3,4],[8,5],[8,6],[8,7]]));
+    // four target diamonds
+    const targets=[[4,3],[5,4],[6,5],[7,6]];
+    for(const [sx,sy] of targets){ for(let dy=-1;dy<=1;dy++){ for(let dx=-1;dx<=1;dx++){ if(Math.abs(dx)+Math.abs(dy)<=1){ const x=sx+dx,y=sy+dy; if(inBounds(g,x,y)){ g.cells[y][x].target=true; g.cells[y][x].value=0; } } } } }
+    return {
+      name:"Kotak Padat",
+      grid:g,
+      player:{x:2,y:2},
+      blocks:[{x:6,y:3,mask:MASK_SQUARE.data,name:MASK_SQUARE.name},{x:9,y:7,mask:MASK_X.data,name:MASK_X.name}],
+      tip:"Balok Kotak men‑toggle ring 3×3 di sekelilingnya. Rencanakan urutan!"
+    };
+  }
+
+  const LEVELS=[makeLevel1(), makeLevel2(), makeLevel3()];
+
+  // ====== Game State ======
+  let state = {
+    levelIndex:0,
+    grid:null,
+    player:null,
+    blocks:null,
+    tip:"",
+    undo:[]
+  };
+
+  function loadLevel(i){
+    const L=LEVELS[i];
+    state.levelIndex=i;
+    state.grid=deepClone(L.grid);
+    state.player=deepClone(L.player);
+    state.blocks=deepClone(L.blocks);
+    state.tip=L.tip||"";
+    state.undo=[];
+    draw();
+  }
+
+  function pushUndo(){
+    state.undo.push({grid:deepClone(state.grid), player:deepClone(state.player), blocks:deepClone(state.blocks)});
+    if(state.undo.length>200) state.undo.shift();
+  }
+  function popUndo(){
+    const snap=state.undo.pop(); if(!snap) return; state.grid=snap.grid; state.player=snap.player; state.blocks=snap.blocks; draw();
+  }
+
+  // ====== Mechanics ======
+  function cellAt(x,y){ if(!inBounds(state.grid,x,y)) return null; return state.grid.cells[y][x]; }
+  function isFree(x,y){ const c=cellAt(x,y); if(!c || c.wall) return false; for(const b of state.blocks){ if(b.x===x && b.y===y) return false; } return !(state.player.x===x && state.player.y===y); }
+
+  function applyMaskAt(mask,x,y){
+    for(let j=0;j<3;j++) for(let i=0;i<3;i++){
+      if(mask[j][i]){
+        const gx=x + (i-1), gy=y + (j-1);
+        const c=cellAt(gx,gy); if(c && !c.wall){ c.value ^= 1; }
+      }
+    }
+  }
+
+  function tryMove(dx,dy){
+    const nx=state.player.x+dx, ny=state.player.y+dy;
+    if(!inBounds(state.grid,nx,ny)) return; 
+    // Is there a block?
+    const bi = state.blocks.findIndex(b=>b.x===nx && b.y===ny);
+    if(bi>=0){
+      const bx2=nx+dx, by2=ny+dy;
+      if(!isFree(bx2,by2)) return; // can't push
+      pushUndo();
+      // move block
+      state.blocks[bi].x=bx2; state.blocks[bi].y=by2;
+      // apply XOR effect at its new position
+      applyMaskAt(state.blocks[bi].mask,bx2,by2);
+      // move player into block's previous spot
+      state.player.x=nx; state.player.y=ny;
+    } else {
+      // empty tile walkable?
+      const c=cellAt(nx,ny); if(!c || c.wall) return;
+      pushUndo();
+      state.player.x=nx; state.player.y=ny;
+    }
+    draw();
+    if(checkWin()) setTimeout(()=>win(), 30);
+  }
+
+  function checkWin(){
+    for(let y=0;y<state.grid.h;y++) for(let x=0;x<state.grid.w;x++){
+      const c=state.grid.cells[y][x]; if(c.target && c.value!==1) return false;
+    }
+    return true;
+  }
+
+  function win(){
+    toast(`Level ${state.levelIndex+1} selesai! 🎉`);
+  }
+
+  // ====== Render ======
+  const cvs=document.getElementById('game');
+  const ctx=cvs.getContext('2d');
+
+  function draw(){
+    const g=state.grid; if(!g) return;
+    const PAD=18;
+    const size=Math.min(cvs.width,cvs.height)-PAD*2;
+    const cell=Math.floor(size/Math.max(g.w,g.h));
+    const ox=Math.floor((cvs.width-cell*g.w)/2); const oy=Math.floor((cvs.height-cell*g.h)/2);
+    ctx.clearRect(0,0,cvs.width,cvs.height);
+
+    // background grid
+    ctx.fillStyle="#0a0d1a"; ctx.fillRect(0,0,cvs.width,cvs.height);
+
+    // draw cells
+    for(let y=0;y<g.h;y++) for(let x=0;x<g.w;x++){
+      const c=g.cells[y][x]; const px=ox+x*cell, py=oy+y*cell;
+      // floor
+      ctx.fillStyle = c.wall?"#14162a":"#151935"; ctx.fillRect(px,py,cell,cell);
+      // target halo
+      if(c.target){
+        ctx.strokeStyle = c.value?"#ffd166":"#444b6a"; ctx.lineWidth=2; ctx.strokeRect(px+2,py+2,cell-4,cell-4);
+      }
+      // value glow
+      if(c.value){
+        const grd=ctx.createRadialGradient(px+cell/2,py+cell/2,2, px+cell/2,py+cell/2, cell*0.6);
+        grd.addColorStop(0,"rgba(255,209,102,.95)");
+        grd.addColorStop(1,"rgba(255,209,102,0)");
+        ctx.fillStyle=grd; ctx.fillRect(px,py,cell,cell);
+        ctx.fillStyle="#f7c948"; ctx.fillRect(px+4,py+4,cell-8,cell-8);
+      }
+      // grid lines
+      ctx.strokeStyle = "#0f1330"; ctx.lineWidth=1; ctx.strokeRect(px,py,cell,cell);
+    }
+
+    // blocks
+    for(const b of state.blocks){
+      const px=ox+b.x*cell, py=oy+b.y*cell;
+      // body
+      ctx.fillStyle="#2f6df6"; ctx.fillRect(px+4,py+4,cell-8,cell-8);
+      ctx.strokeStyle="#93c5fd"; ctx.lineWidth=2; ctx.strokeRect(px+4,py+4,cell-8,cell-8);
+      // draw mask preview inside
+      const sub=cell/3; ctx.globalAlpha=.9;
+      for(let j=0;j<3;j++) for(let i=0;i<3;i++) if(b.mask[j][i]){
+        ctx.fillStyle="#a7f3d0"; ctx.fillRect(px+i*sub+cell/6-4, py+j*sub+cell/6-4, 8, 8);
+      }
+      ctx.globalAlpha=1;
+    }
+
+    // player
+    const p=state.player; const ppx=ox+p.x*cell+cell/2, ppy=oy+p.y*cell+cell/2;
+    ctx.beginPath(); ctx.arc(ppx,ppy,cell*0.28,0,Math.PI*2);
+    ctx.fillStyle="#22c55e"; ctx.fill();
+    ctx.lineWidth=2; ctx.strokeStyle="#b7f7cd"; ctx.stroke();
+
+    // tip
+    drawTip();
+  }
+
+  function drawTip(){
+    const txt = state.tip;
+    if(!txt) return;
+    const pad=12; const y=cvs.height-8; const w=cvs.width - pad*2; const x=pad;
+    ctx.font = "14px system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial";
+    ctx.textBaseline='alphabetic';
+    const metrics=ctx.measureText(txt);
+    const th=18; const tw=metrics.width+20;
+    ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillRect(x,y-th-10, Math.min(tw,w), th+10);
+    ctx.strokeStyle='rgba(255,255,255,.08)'; ctx.strokeRect(x,y-th-10, Math.min(tw,w), th+10);
+    ctx.fillStyle='#cdd3f8'; ctx.fillText(txt, x+10, y-12);
+  }
+
+  // ====== Input ======
+  const dirs={
+    ArrowUp:[0,-1], ArrowDown:[0,1], ArrowLeft:[-1,0], ArrowRight:[1,0],
+    KeyW:[0,-1], KeyS:[0,1], KeyA:[-1,0], KeyD:[1,0]
+  };
+  window.addEventListener('keydown',e=>{
+    if(dirs[e.code]){ e.preventDefault(); const [dx,dy]=dirs[e.code]; tryMove(dx,dy); }
+    if(e.code==='KeyZ' && (e.ctrlKey||e.metaKey)) { e.preventDefault(); popUndo(); }
+    if(e.code==='KeyR'){ e.preventDefault(); loadLevel(state.levelIndex); toast('Reset level'); }
+  });
+
+  document.querySelectorAll('[data-dir]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const m={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]}[btn.dataset.dir];
+      tryMove(...m);
+    })
+  });
+
+  // ====== UI Buttons ======
+  const sel=document.getElementById('levelSelect');
+  LEVELS.forEach((L,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=`${i+1}. ${L.name}`; sel.appendChild(o); });
+  sel.addEventListener('change',()=>{ loadLevel(+sel.value); });
+
+  document.getElementById('btnReset').onclick=()=>loadLevel(state.levelIndex);
+  document.getElementById('btnUndo').onclick=()=>popUndo();
+  document.getElementById('btnPrev').onclick=()=>{ if(state.levelIndex>0){ sel.value=state.levelIndex-1; loadLevel(state.levelIndex-1);} };
+  document.getElementById('btnNext').onclick=()=>{ if(state.levelIndex<LEVELS.length-1){ sel.value=state.levelIndex+1; loadLevel(state.levelIndex+1);} };
+
+  // ====== Toast ======
+  let toastTimer=null;
+  function toast(msg){
+    const t=document.createElement('div');
+    t.textContent=msg; t.style.position='fixed'; t.style.left='50%'; t.style.top='16px'; t.style.transform='translateX(-50%)';
+    t.style.background='linear-gradient(135deg,#3b82f6,#06b6d4)'; t.style.padding='10px 14px'; t.style.borderRadius='12px'; t.style.boxShadow='0 6px 20px rgba(0,0,0,.35)';
+    t.style.color='#fff'; t.style.fontWeight='700'; t.style.zIndex=9999; document.body.appendChild(t);
+    clearTimeout(toastTimer); toastTimer=setTimeout(()=>{ t.style.transition='opacity .35s, transform .35s'; t.style.opacity='0'; t.style.transform='translate(-50%, -10px)'; setTimeout(()=>t.remove(),400); }, 1500);
+  }
+
+  // Init
+  function onResize(){
+    // make canvas square and responsive
+    const parent = document.getElementById('game').parentElement;
+    const w = Math.min(parent.clientWidth-24, 720);
+    const h = w; // square
+    cvs.width=w*2; cvs.height=h*2; // high DPI rendering
+    cvs.style.width=w+'px'; cvs.style.height=h+'px';
+    draw();
+  }
+  window.addEventListener('resize', onResize);
+
+  loadLevel(0); sel.value=0; onResize();
+  </script>
+</body>
+</html>

@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kejar-kejaran 2 Pemain – WASD vs Arrow Keys</title>
+  <style>
+    :root {
+      --bg: #0f1226;
+      --panel: #171a33;
+      --text: #e9ecff;
+      --accent: #7aa2ff;
+      --danger: #ff6b6b;
+      --safe: #45f0b0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 600px at 20% 0%, #13163a, var(--bg));
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+    }
+    .wrap {
+      width: min(960px, 96vw);
+    }
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 1rem; margin: 16px 0 10px;
+    }
+    h1 { font-size: clamp(1.1rem, 2vw + 0.6rem, 1.6rem); margin: 0; letter-spacing: .3px; }
+    .panel {
+      background: linear-gradient(180deg, #1b1e3b, var(--panel));
+      border: 1px solid #2a2e57;
+      box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 0 40px rgba(122,162,255,.05);
+      border-radius: 16px;
+      padding: 12px;
+    }
+    .hud {
+      display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center;
+      font-size: 14px;
+    }
+    .legend { display: flex; flex-wrap: wrap; gap: 10px; opacity: .95; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: #0d1026; border: 1px solid #2a2e57; padding: 6px 10px; border-radius: 999px;
+    }
+    .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+    .dot.blue { background: #4aa8ff; box-shadow: 0 0 10px #4aa8ff66; }
+    .dot.red  { background: #ff5c7a; box-shadow: 0 0 10px #ff5c7a66; }
+
+    #game {
+      width: 100%; aspect-ratio: 16/9; display: block;
+      background: radial-gradient(800px 400px at 70% 0%, #0f1335 20%, #0b0e2a 60%, #080a20 100%);
+      border-radius: 16px; border: 1px solid #2a2e57;
+    }
+
+    .footer { margin-top: 10px; font-size: 12px; opacity: .85; text-align: center; }
+    kbd { background: #0d1026; border: 1px solid #2a2e57; border-bottom-color: #1f2347; padding: 2px 6px; border-radius: 6px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Kejar‑kejaran 2 Pemain – <span style="color: var(--accent)">WASD</span> vs <span style="color: var(--danger)">Arrow Keys</span></h1>
+    </header>
+
+    <div class="panel hud">
+      <div class="legend">
+        <span class="pill"><span class="dot blue"></span> Pelari (P1) – WASD</span>
+        <span class="pill"><span class="dot red"></span> Pengejar (P2) – Panah ↑↓←→</span>
+        <span class="pill">Menang: P2 jika menyentuh P1</span>
+        <span class="pill">Reset: <kbd>R</kbd>  •  Pause: <kbd>Space</kbd></span>
+      </div>
+      <div id="status" aria-live="polite">Status: bermain…</div>
+    </div>
+
+    <canvas id="game"></canvas>
+    <div class="footer">Tip: Tahan dua tombol (mis. <kbd>W</kbd> + <kbd>D</kbd>) untuk bergerak diagonal. Panah pada browser kadang menggulir; game ini memblokirnya agar kontrol lancar.</div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const statusEl = document.getElementById('status');
+
+    // Resize canvas to CSS size with proper pixel ratio
+    function fitCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.floor(rect.width * dpr);
+      canvas.height = Math.floor(rect.height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    window.addEventListener('resize', fitCanvas);
+    fitCanvas();
+
+    // Game objects
+    const world = {
+      w: () => canvas.clientWidth,
+      h: () => canvas.clientHeight,
+      padding: 12,
+    };
+
+    const P1 = { // Runner – WASD
+      color: '#4aa8ff',
+      glow: 'rgba(74,168,255,.45)',
+      size: 26,
+      speed: 3.1,
+      x: 100,
+      y: 100,
+    };
+
+    const P2 = { // Chaser – Arrow Keys
+      color: '#ff5c7a',
+      glow: 'rgba(255,92,122,.45)',
+      size: 28,
+      speed: 3.2,
+      x: 260,
+      y: 220,
+    };
+
+    let keys = new Set();
+    let paused = false;
+    let over = false;
+
+    function reset() {
+      P1.x = world.w() * 0.25; P1.y = world.h() * 0.5;
+      P2.x = world.w() * 0.75; P2.y = world.h() * 0.5;
+      over = false; paused = false;
+      setStatus('Status: bermain…');
+    }
+
+    function setStatus(s) { statusEl.textContent = s; }
+
+    // Input handling
+    window.addEventListener('keydown', (e) => {
+      const controlKeys = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '];
+      if (controlKeys.includes(e.key)) e.preventDefault();
+      keys.add(e.key.toLowerCase());
+      if (e.key === ' ') paused = !paused;
+      if (e.key.toLowerCase() === 'r') reset();
+    }, { passive: false });
+
+    window.addEventListener('keyup', (e) => {
+      keys.delete(e.key.toLowerCase());
+    });
+
+    function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+    function stepPlayer(p, up, down, left, right) {
+      let vx = 0, vy = 0;
+      if (keys.has(up)) vy -= 1;
+      if (keys.has(down)) vy += 1;
+      if (keys.has(left)) vx -= 1;
+      if (keys.has(right)) vx += 1;
+      // Normalize diagonal speed
+      if (vx !== 0 || vy !== 0) {
+        const mag = Math.hypot(vx, vy);
+        vx /= mag; vy /= mag;
+        p.x += vx * p.speed;
+        p.y += vy * p.speed;
+      }
+      // Keep inside bounds
+      p.x = clamp(p.x, world.padding, world.w() - world.padding - p.size);
+      p.y = clamp(p.y, world.padding, world.h() - world.padding - p.size);
+    }
+
+    function drawPlayer(p) {
+      ctx.save();
+      ctx.shadowBlur = 25; ctx.shadowColor = p.glow; ctx.globalAlpha = 0.95;
+      ctx.fillStyle = p.color;
+      roundRect(ctx, p.x, p.y, p.size, p.size, 7);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function roundRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    function drawArena() {
+      // Border
+      const p = world.padding;
+      const w = world.w();
+      const h = world.h();
+
+      ctx.save();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(122,162,255,.45)';
+      ctx.setLineDash([8,8]);
+      roundRect(ctx, p, p, w - p*2, h - p*2, 14);
+      ctx.stroke();
+      ctx.restore();
+
+      // Center glow
+      const g = ctx.createRadialGradient(w/2, h/2, 30, w/2, h/2, Math.max(w,h)*.6);
+      g.addColorStop(0, 'rgba(122,162,255,.08)');
+      g.addColorStop(1, 'rgba(122,162,255,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0,0,w,h);
+    }
+
+    function collide() {
+      // Simple AABB overlap
+      return !(
+        P1.x + P1.size < P2.x ||
+        P1.x > P2.x + P2.size ||
+        P1.y + P1.size < P2.y ||
+        P1.y > P2.y + P2.size
+      );
+    }
+
+    function banner(text, color) {
+      ctx.save();
+      ctx.globalAlpha = .95;
+      ctx.fillStyle = 'rgba(0,0,0,.45)';
+      ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+      ctx.fillStyle = color;
+      ctx.font = '700 32px ui-sans-serif, system-ui, Segoe UI, Roboto';
+      ctx.textAlign = 'center';
+      ctx.fillText(text, canvas.clientWidth/2, canvas.clientHeight/2);
+      ctx.font = '400 16px ui-sans-serif, system-ui, Segoe UI, Roboto';
+      ctx.fillText('Tekan R untuk reset • Spasi untuk pause', canvas.clientWidth/2, canvas.clientHeight/2 + 28);
+      ctx.restore();
+    }
+
+    function loop() {
+      requestAnimationFrame(loop);
+      fitCanvas();
+      ctx.clearRect(0,0,canvas.clientWidth, canvas.clientHeight);
+      drawArena();
+
+      if (!paused && !over) {
+        // WASD for Player 1 (runner)
+        stepPlayer(P1, 'w','s','a','d');
+        // Arrows for Player 2 (chaser)
+        stepPlayer(P2, 'arrowup','arrowdown','arrowleft','arrowright');
+
+        if (collide()) {
+          over = true;
+          setStatus('Hasil: P2 menang! P1 tertangkap. Tekan R untuk main lagi.');
+        }
+      }
+
+      // Draw players
+      drawPlayer(P1);
+      drawPlayer(P2);
+
+      if (paused && !over) banner('PAUSE', '#e9ecff');
+      if (over) banner('P2 MENANG – P1 TERTANGKAP', '#ff9fb0');
+    }
+
+    reset();
+    loop();
+  </script>
+</body>
+</html>

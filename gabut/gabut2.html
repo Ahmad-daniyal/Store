@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kejar-kejaran 2 Pemain – WASD vs Arrow Keys + Rintangan + Timer</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #0f1226;
+      color: #e9ecff;
+      display: grid;
+      place-items: center;
+      height: 100vh;
+    }
+    canvas {
+      background: #1b1e3b;
+      border-radius: 16px;
+      border: 2px solid #2a2e57;
+    }
+    #status {
+      margin-top: 8px;
+      font-size: 16px;
+    }
+    #timer {
+      margin-top: 4px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game" width="800" height="500"></canvas>
+  <div id="status">Status: bermain…</div>
+  <div id="timer">Waktu: 60 detik</div>
+  <script>  
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const statusEl = document.getElementById('status');
+    const timerEl = document.getElementById('timer');
+
+    const P1 = {color: '#4aa8ff', size: 26, speed: 3.1, x: 100, y: 100};
+    const P2 = {color: '#ff5c7a', size: 28, speed: 3.2, x: 600, y: 300};
+
+    const obstacles = [
+      {x: 200, y: 150, w: 100, h: 30},
+      {x: 500, y: 100, w: 40, h: 150},
+      {x: 300, y: 300, w: 150, h: 30}
+    ];
+
+    let keys = new Set();
+    let paused = false;
+    let over = false;
+    let timeLeft = 60;
+    let timerInterval;
+
+    function reset() {
+      P1.x = 100; P1.y = 100;
+      P2.x = 600; P2.y = 300;
+      over = false; paused = false;
+      timeLeft = 60;
+      timerEl.textContent = 'Waktu: 60 detik';
+      clearInterval(timerInterval);
+      startTimer();
+      statusEl.textContent = 'Status: bermain…';
+
+    }
+    
+
+    function startTimer() {
+      timerInterval = setInterval(() => {
+        if (!paused && !over) {
+          timeLeft--;
+          timerEl.textContent = 'Waktu: ' + timeLeft + ' detik';
+          if (timeLeft <= 0) {
+            clearInterval(timerInterval);
+            over = true;
+            statusEl.textContent = 'Hasil: P1 menang! Waktu habis.';
+          }
+        }
+      }, 1000);
+    }
+
+    window.addEventListener('keydown', (e) => {
+      const controlKeys = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '];
+      if (controlKeys.includes(e.key)) e.preventDefault();
+      keys.add(e.key.toLowerCase());
+      if (e.key === ' ') paused = !paused;
+      if (e.key.toLowerCase() === 'r') reset();
+    });
+
+    window.addEventListener('keyup', (e) => {
+      keys.delete(e.key.toLowerCase());
+    });
+
+    function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+    function stepPlayer(p, up, down, left, right) {
+      let vx = 0, vy = 0;
+      if (keys.has(up)) vy -= 1;
+      if (keys.has(down)) vy += 1;
+      if (keys.has(left)) vx -= 1;
+      if (keys.has(right)) vx += 1;
+      if (vx !== 0 || vy !== 0) {
+        const mag = Math.hypot(vx, vy);
+        vx /= mag; vy /= mag;
+        let newX = p.x + vx * p.speed;
+        let newY = p.y + vy * p.speed;
+
+        if (!collidesWithObstacle(newX, p.y, p.size, p.size)) p.x = newX;
+        if (!collidesWithObstacle(p.x, newY, p.size, p.size)) p.y = newY;
+      }
+      p.x = clamp(p.x, 0, canvas.width - p.size);
+      p.y = clamp(p.y, 0, canvas.height - p.size);
+    }
+
+    function collidesWithObstacle(x, y, w, h) {
+      return obstacles.some(o => x < o.x + o.w && x + w > o.x && y < o.y + o.h && y + h > o.y);
+    }
+
+    function drawPlayer(p) {
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x, p.y, p.size, p.size);
+    }
+
+    function drawObstacles() {
+      ctx.fillStyle = '#888';
+      obstacles.forEach(o => ctx.fillRect(o.x, o.y, o.w, o.h));
+    }
+
+    function collide() {
+      return !(P1.x + P1.size < P2.x || P1.x > P2.x + P2.size || P1.y + P1.size < P2.y || P1.y > P2.y + P2.size);
+    }
+
+    function banner(text) {
+      ctx.fillStyle = 'rgba(0,0,0,.5)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 32px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(text, canvas.width/2, canvas.height/2);
+      ctx.font = '16px Arial';
+      ctx.fillText('Tekan R untuk reset • Spasi untuk pause', canvas.width/2, canvas.height/2 + 30);
+    }
+
+    function loop() {
+      requestAnimationFrame(loop);
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+
+      drawObstacles();
+
+      if (!paused && !over) {
+        stepPlayer(P1, 'w','s','a','d');
+        stepPlayer(P2, 'arrowup','arrowdown','arrowleft','arrowright');
+
+        if (collide()) {
+          over = true;
+          clearInterval(timerInterval);
+          statusEl.textContent = 'Hasil: P2 menang! P1 tertangkap. Tekan R untuk main lagi.';
+        }
+      }
+
+      drawPlayer(P1);
+      drawPlayer(P2);
+
+      if (paused && !over) banner('PAUSE');
+      if (over && timeLeft <= 0) banner('P1 MENANG – WAKTU HABIS');
+      if (over && timeLeft > 0) banner('P2 MENANG – P1 TERTANGKAP');
+    }
+
+    reset();
+    startTimer();
+    loop();
+  </script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+.igoobb{
+    display: flex;
+    justify-content: center;
+    gap: 20px;}
+    .legi  {
+        width: 200px;
+        border: 1px solid black;
+        padding: 10px;
+        border-radius: 2cap;
+        box-shadow: 5px 5px 5px grey;
+        height: 450px;
+        margin-top: 20px;
+        overflow: hidden;
+    }
+    .legi img
+    {
+        width: 100%;
+        border-radius: 1cap;
+        height: 150px;
+        object-fit: cover;
+        max-width: auto;
+    }
