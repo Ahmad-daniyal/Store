@@ -2,7 +2,8 @@
     .daym {
         display: flex;
         justify-content: center;
-        gap: 20px;
+        gap: 40px;
+        background-color: black;
     }
     .card  {
         width: 200px;
@@ -49,3 +50,8 @@
             text-decoration: none;
             box-shadow: 0 0 20px #F09819;
           }
+          
+
+
+
+        
