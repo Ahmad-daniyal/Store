@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Love Cursor</title>
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      overflow: hidden;
+      background: #eb77a2;
+      cursor: none;
+      font-family: sans-serif;
+    }
+
+    .heart {
+      position: absolute;
+      color: red;
+      font-size: 40px;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      animation: fade 1.5s linear forwards;
+    }
+    .daym {
+  display: flex;
+  justify-content: center;
+  align-content: center;
+  gap: 20px;
+}
+.iklan{
+  width: 36rem;
+  border: 1px solid black;
+  margin-top: 130px;
+  overflow: hidden;
+  border-radius: 1cap;
+}
+.iklan img {
+  width: 100%;
+  border-radius: 1cap;
+  height: 350px;
+  max-width: auto;
+}
+
+    @keyframes fade {
+      0%   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, -80%) scale(0.5); }
+    }
+
+  </style>
+</head>
+<body>
+
+    <div class="daym">
+        <div class="iklan">
+            <img src="IMG-20251108-WA0002.jpg" alt="">
+        </div>
+    </div>
+<script>
+  document.addEventListener("mousemove", function(e) {
+    const heart = document.createElement("div");
+    heart.className = "heart";
+    heart.textContent = "❤";
+    heart.style.left = e.pageX + "px";
+    heart.style.top = e.pageY + "px";
+
+    document.body.appendChild(heart);
+
+    setTimeout(() => heart.remove(), 1500);
+  });
+</script>
+
+</body>
+</html>
+

@@ -1,3 +1,6 @@
+body {
+  margin: 0%;
+}
 .daym {
   display: flex;
   justify-content: center;
@@ -20,12 +23,20 @@
   object-fit: cover;
   max-width: auto;
 }
+.card h2 {
+font-size: small;
+margin-top: 1px;
+}
+.card h3 {
+  font-size: small;
+}
+
 .iklan{
   width: 32rem;
   border: 1px solid black;
-  border-radius: 2cap;
-  margin-top: 20px;
+  margin-top: 70px;
   overflow: hidden;
+  border-radius: 1cap;
 }
 .iklan img {
   width: 100%;
@@ -36,6 +47,8 @@
 .kategori{
   width: 50px;
   margin-top: 20px;
+  overflow: hidden;
+  margin-top: 40px;
   overflow: hidden;
 }
 .kategori img {
@@ -93,4 +106,21 @@
     }
     .whatsapp-btn:hover {
       background-color: #1ebe5d;
+    }
+
+    nav {
+      background-color: blanchedalmond;
+      padding: 10px 0;
+      display: block;
+      width: 100%;
+      text-decoration: none;
+      position: fixed;
+    }
+
+    nav ul {
+      list-style-type: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      gap: 30px;
     }
