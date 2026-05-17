@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+
+    <input type="text" id="nama" placeholder="Masukkan nama">
+<button onclick="nama()">Tampilkan</button>
+<br>
+    <input type="text" id="kelas" placeholder="Masukkan kelas">
+<button onclick="kelas()">Tampilkan</button>
+<br>
+    <input type="text" id="jurusan" placeholder="Masukkan jurusan">
+<button onclick="jurusan()">Tampilkan</button>
+
+
+<p id="hasil.nama"></p>
+<p id="hasil.kelas"></p>
+<p id="hasil.jurusan"></p>
+
+
+<script>
+function nama() {
+
+  let nama = document.getElementById("nama").value;
+
+  document.getElementById("hasil.nama").innerHTML = "Nama: " + nama;
+
+}
+
+function kelas() {
+
+  let kelas = document.getElementById("kelas").value;
+
+  document.getElementById("hasil.kelas").innerHTML = "kelas: " + kelas;
+
+}
+
+function jurusan() {
+
+  let jurusan = document.getElementById("jurusan").value;
+
+  document.getElementById("hasil.jurusan").innerHTML = "jurusan: " + jurusan;
+
+}
+</script>
+</body>
+</html>

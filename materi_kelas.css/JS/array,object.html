@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+   <script>
+let barang = [
+  { nama: "Laptop", harga: 5000000 },
+  { nama: "Mouse", harga: 200000 },
+  { nama: "Keyboard", harga: 300000 },
+  { nama: "Monitor", harga: 1500000 },
+  { nama: "Printer", harga: 1200000 },
+  { nama: "Flashdisk", harga: 100000 },
+  { nama: "Harddisk", harga: 800000 },
+  { nama: "Headset", harga: 250000 },
+  { nama: "Webcam", harga: 400000 },
+  { nama: "Speaker", harga: 350000 }
+];
+
+let daftarBarang = barang.map((item) => {
+  return 
+    `<p>
+      Nama: ${item.nama} <br>
+      Harga: Rp ${item.harga}
+    </p>`;
+});
+
+
+
+document.write(daftarBarang.join(""));
+</script>
+<h1></h1>
+</body>
+</html>
