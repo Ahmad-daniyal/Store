@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body> 
+
+    <h1>Batu Gunting Kertas</h1>
+
+<button onclick="main('batu')">Batu</button>
+
+<button onclick="main('gunting')">Gunting</button>
+
+<button onclick="main('kertas')">Kertas</button>
+
+<h2 id="hasil"></h2>
+
+<script>
+
+   let angkaRahasia = Math.floor(Math.random() * 10);
+        
+        let tebakan = prompt("Tebak angka 0-9");
+        
+        if (tebakan == angkaRahasia) {
+            alert("Benar");
+        } else {
+            alert("Salah");
+        }
+
+    function main(pilihan) {
+        let komputer = Math.floor(Math.random() * 3);
+        let hasil = "";
+
+        if (pilihan === "batu") {
+            if (komputer === 0) {
+                hasil = "Seri";
+            } else if (komputer === 1) {
+                hasil = "Menang";
+            } else {
+                hasil = "Kalah";
+            }
+        } else if (pilihan === "gunting") {
+            if (komputer === 0) {
+                hasil = "Kalah";
+            } else if (komputer === 1) {
+                hasil = "Seri";
+            } else {
+                hasil = "Menang";
+            }
+        } else if (pilihan === "kertas") {
+            if (komputer === 0) {
+                hasil = "Menang";
+            } else if (komputer === 1) {
+                hasil = "Kalah";
+            } else {
+                hasil = "Seri";
+            }
+        }
+
+        document.getElementById("hasil").innerHTML = hasil;
+    }
+</script>
+
+</body>
+</html>
